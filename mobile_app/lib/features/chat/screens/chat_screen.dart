@@ -50,10 +50,11 @@ class _ChatScreenState extends State<ChatScreen> {
         child: BlocConsumer<ChatCubit, ChatState>(
           listener: (context, state) {
             _scrollToBottom();
-            if (state.status == ChatStatus.error && state.errorMessage != null) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(state.errorMessage!)),
-              );
+            if (state.status == ChatStatus.error &&
+                state.errorMessage != null) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text(state.errorMessage!)));
             }
           },
           builder: (context, state) {
@@ -165,10 +166,7 @@ class _ChatBubble extends StatelessWidget {
             borderRadius: BorderRadius.circular(14),
             border: isUser ? null : Border.all(color: AppColors.border),
           ),
-          child: Text(
-            message.text,
-            style: TextStyle(color: fg, height: 1.3),
-          ),
+          child: Text(message.text, style: TextStyle(color: fg, height: 1.3)),
         ),
       ],
     );
@@ -270,7 +268,9 @@ class _RecommendationsPanel extends StatelessWidget {
                           child: TextButton(
                             onPressed: () {
                               final intent = (cta.isEmpty ? title : cta).trim();
-                              context.read<ChatCubit>().sendMessage('I want to $intent');
+                              context.read<ChatCubit>().sendMessage(
+                                'I want to $intent',
+                              );
                             },
                             style: TextButton.styleFrom(
                               foregroundColor: AppColors.secondaryColor,

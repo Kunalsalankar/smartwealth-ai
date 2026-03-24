@@ -42,24 +42,13 @@ class GeminiClient:
     def enabled(self) -> bool:
         return bool(self._config.api_keys) and bool(self._config.models)
 
-    def extract(self, message: str) -> dict[str, Any] | None:
+    def extract(self, prompt: str) -> dict[str, Any] | None:
         """Best-effort JSON extraction using Gemini. Returns None if unavailable."""
         if not self.enabled:
             return None
 
         # Import lazily so the app still runs without the dependency.
         import google.generativeai as genai  # type: ignore
-
-        prompt = (
-            "You are SmartWealth AI, a financial concierge. "
-            "Extract a structured profile from the user message. "
-            "Return ONLY valid JSON with keys: "
-            "user_type (student|salaried|investor|null), income (int|null), "
-            "goal (saving|investing|learning|null), persona (Beginner|Experienced|null), "
-            "has_home_loan_intent (bool). "
-            "Message: "
-            + message
-        )
 
         for api_key in self._config.api_keys:
             try:
@@ -71,7 +60,12 @@ class GeminiClient:
                 if not isinstance(text, str) or not text.strip():
                     continue
 
-                data = json.loads(text)
+                cleaned = text.strip()
+                if cleaned.startswith("```"):
+                    cleaned = cleaned.strip("`")
+                    cleaned = cleaned.replace("json", "", 1).strip()
+
+                data = json.loads(cleaned)
                 if isinstance(data, dict):
                     return data
             except Exception:

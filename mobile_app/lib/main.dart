@@ -3,7 +3,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'core/constants/colors.dart';
 import 'features/chat/cubit/chat_cubit.dart';
-import 'features/chat/screens/chat_screen.dart';
+import 'features/welcome/cubit/welcome_cubit.dart';
+import 'features/welcome/screens/welcome_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -38,12 +39,16 @@ class MyApp extends StatelessWidget {
       useMaterial3: true,
     );
 
-    return BlocProvider(
-      create: (_) => ChatCubit(),
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider(create: (_) => ChatCubit()),
+        BlocProvider(create: (_) => WelcomeCubit()),
+      ],
       child: MaterialApp(
         title: 'SmartWealth AI',
+        debugShowCheckedModeBanner: false,
         theme: theme,
-        home: const ChatScreen(),
+        home: const WelcomeScreen(),
       ),
     );
   }

@@ -23,5 +23,12 @@ class ChatMessage extends Equatable {
   final String? nextAction;
 
   @override
-  List<Object?> get props => [sender, text, profile, need, recommendations, nextAction];
+  List<Object?> get props => [
+    sender,
+    text,
+    profile,
+    need,
+    recommendations,
+    nextAction,
+  ];
 }

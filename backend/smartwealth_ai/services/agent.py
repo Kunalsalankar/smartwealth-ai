@@ -25,6 +25,10 @@ class Profile:
 
 def run_agentic_chat(message: str, user_context: dict[str, Any]) -> dict[str, Any]:
     profile = profile_extractor(message=message, user_context=user_context)
+
+    if user_context.get("flow") == "welcome":
+        return run_welcome_concierge(message=message, profile=profile)
+
     need_data = need_identifier(message=message, profile=profile)
     recs = recommendation_engine(message=message, profile=profile, need_data=need_data)
     next_action = action_generator(profile=profile, need_data=need_data, recommendations=recs)
@@ -43,7 +47,161 @@ def run_agentic_chat(message: str, user_context: dict[str, Any]) -> dict[str, An
         "need": need_data["need"],
         "recommendations": recs,
         "next_action": next_action,
+        "welcome": {"completed": True},
     }
+
+
+def run_welcome_concierge(message: str, profile: Profile) -> dict[str, Any]:
+    """3-turn welcome + profiling flow.
+
+    The client should call /chat with user_context.flow=welcome.
+    We store welcome progress in USER_MEMORY under the same user_id.
+    """
+
+    mem = USER_MEMORY.get(profile.user_id, {})
+    welcome = mem.get("welcome") if isinstance(mem.get("welcome"), dict) else {}
+    turn = int(welcome.get("turn", 0))
+    completed = bool(welcome.get("completed", False))
+
+    if completed:
+        return {
+            "assistant_message": "Welcome back — your onboarding path is ready. You can continue in chat.",
+            "profile": asdict(profile),
+            "need": "welcome_completed",
+            "recommendations": [],
+            "next_action": "Continue",
+            "welcome": {"turn": turn, "completed": True, "products": welcome.get("products", []), "onboarding_path": welcome.get("onboarding_path", [])},
+        }
+
+    gemini = GeminiClient(load_gemini_config())
+
+    if gemini.enabled:
+        data = _welcome_with_gemini(gemini=gemini, message=message, profile=profile, turn=turn, memory=welcome)
+        if isinstance(data, dict):
+            # Persist
+            USER_MEMORY[profile.user_id] = {
+                **mem,
+                "welcome": {
+                    **welcome,
+                    "turn": int(data.get("turn", turn)),
+                    "completed": bool(data.get("completed", False)),
+                    "products": data.get("products", welcome.get("products", [])),
+                    "onboarding_path": data.get("onboarding_path", welcome.get("onboarding_path", [])),
+                },
+            }
+
+            return {
+                "assistant_message": str(data.get("assistant_message") or ""),
+                "profile": asdict(profile),
+                "need": "welcome_concierge",
+                "recommendations": [],
+                "next_action": str(data.get("next_action") or ""),
+                "welcome": {
+                    "turn": int(data.get("turn", turn)),
+                    "completed": bool(data.get("completed", False)),
+                    "products": data.get("products", []),
+                    "onboarding_path": data.get("onboarding_path", []),
+                },
+            }
+
+    # Fallback deterministic welcome (max 3 turns)
+    if turn == 0:
+        assistant_message = (
+            "Welcome to ET! I’ll set up a quick 3-minute plan. "
+            "To start: what’s your monthly income range and are you completely new to investing?"
+        )
+        next_action = "Share income range + investing experience"
+        new_turn = 1
+        products: list[dict[str, Any]] = []
+        onboarding_path: list[dict[str, Any]] = []
+        completed = False
+    elif turn == 1:
+        assistant_message = (
+            "Thanks. Next: what’s your main goal right now — building savings, starting SIP, or learning basics?"
+        )
+        next_action = "Choose one goal"
+        new_turn = 2
+        products = []
+        onboarding_path = []
+        completed = False
+    else:
+        products = [
+            {"product": "ET Money", "why": "Simple goal-based SIP journeys and tracking."},
+            {"product": "ET Markets (Beginner SIP content)", "why": "Learn SIP basics in plain language."},
+            {"product": "ET Masterclass", "why": "A guided session to start investing confidently."},
+        ]
+        onboarding_path = [
+            {"step": 1, "title": "Learn SIP basics", "action": "Open ET Markets beginner content"},
+            {"step": 2, "title": "Choose SIP amount", "action": "Start a small SIP plan"},
+            {"step": 3, "title": "Track monthly", "action": "Use ET Money goal tracker"},
+        ]
+        assistant_message = (
+            "Great — here’s a simple onboarding path. I’ll keep it jargon-free. "
+            "I recommend ET Money + ET Markets beginner SIP content, and a short masterclass if you want guided help."
+        )
+        next_action = "Tap a product to start"
+        new_turn = 3
+        completed = True
+
+    USER_MEMORY[profile.user_id] = {
+        **mem,
+        "welcome": {
+            **welcome,
+            "turn": new_turn,
+            "completed": completed,
+            "products": products,
+            "onboarding_path": onboarding_path,
+        },
+    }
+
+    return {
+        "assistant_message": assistant_message,
+        "profile": asdict(profile),
+        "need": "welcome_concierge",
+        "recommendations": [],
+        "next_action": next_action,
+        "welcome": {
+            "turn": new_turn,
+            "completed": completed,
+            "products": products,
+            "onboarding_path": onboarding_path,
+        },
+    }
+
+
+def _welcome_with_gemini(
+    gemini: GeminiClient,
+    message: str,
+    profile: Profile,
+    turn: int,
+    memory: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Use Gemini to drive a <=3 turn welcome flow.
+
+    Returns dict with:
+    assistant_message (str), next_action (str), turn (int), completed (bool),
+    products (list[{product, why}]), onboarding_path (list[{step,title,action}]).
+    """
+
+    prompt = (
+        "You are ET Welcome Concierge. You greet new/returning users and in 3 turns or fewer "
+        "collect minimal info (stage, experience, goal) and then recommend 2-3 ET products and a personalized onboarding path. "
+        "Avoid jargon and overwhelming options. "
+        "Return ONLY valid JSON with keys: assistant_message (string), next_action (string), "
+        "turn (int), completed (bool), products (array of {product, why}), onboarding_path (array of {step,title,action}).\n\n"
+        f"Current turn: {turn}. Completed so far: {bool(memory.get('completed', False))}.\n"
+        f"Known profile: user_type={profile.user_type}, income={profile.income}, goal={profile.goal}, persona={profile.persona}.\n"
+        f"User message: {message}"
+    )
+
+    extracted = gemini.extract(prompt)
+    if not isinstance(extracted, dict):
+        return None
+
+    # Basic normalization
+    extracted.setdefault("turn", min(turn + 1, 3))
+    extracted.setdefault("completed", False)
+    return extracted
 
 
 def profile_extractor(message: str, user_context: dict[str, Any]) -> Profile:
