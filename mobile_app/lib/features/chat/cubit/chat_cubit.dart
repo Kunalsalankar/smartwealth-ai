@@ -83,7 +83,7 @@ class ChatCubit extends Cubit<ChatState> {
       final resp = await _apiService.personalizedHome(body);
       final data = HomeInsightsData.fromJson(resp);
       if (data.greeting.isEmpty ||
-          data.recommendations.length < 2 ||
+          data.recommendations.isEmpty ||
           data.nextAction.isEmpty ||
           data.tip.isEmpty) {
         throw Exception('Incomplete AI response');

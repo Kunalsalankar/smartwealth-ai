@@ -53,9 +53,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     }
 
     var income = 'Not specified';
-    final incMatch = RegExp(
-      r'(\d{1,3}(?:,\d{3})+|\d{4,})',
-    ).firstMatch(a0);
+    final incMatch = RegExp(r'(\d{1,3}(?:,\d{3})+|\d{4,})').firstMatch(a0);
     if (incMatch != null) {
       income = '₹${incMatch.group(1)} monthly (approx.)';
     }
@@ -75,27 +73,25 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     final chatCubit = context.read<ChatCubit>();
     final profile = _buildProfile(welcomeState);
     chatCubit.setUserProfile(profile);
-    try {
-      await chatCubit.fetchPersonalizedHome();
-      if (!mounted) return;
-      if (chatCubit.state.homeInsightsStatus == HomeInsightsStatus.success) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute<void>(builder: (_) => const HomeScreen()),
-        );
-      } else {
-        if (_answers.isNotEmpty) {
-          _answers.removeLast();
-        }
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              chatCubit.state.homeErrorMessage ??
-                  'Could not load your personalized home.',
-            ),
-          ),
-        );
+    await chatCubit.fetchPersonalizedHome();
+    if (!mounted) return;
+    if (chatCubit.state.homeInsightsStatus == HomeInsightsStatus.success) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(builder: (_) => const HomeScreen()),
+      );
+    } else {
+      if (_answers.isNotEmpty) {
+        _answers.removeLast();
       }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            chatCubit.state.homeErrorMessage ??
+                'Could not load your personalized home.',
+          ),
+        ),
+      );
     }
   }
 

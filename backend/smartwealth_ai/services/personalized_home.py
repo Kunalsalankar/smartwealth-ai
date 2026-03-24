@@ -52,7 +52,7 @@ def generate_personalized_home(
     next_action = str(data.get("next_action") or "").strip()
     tip = str(data.get("tip") or "").strip()
 
-    if not greeting or len(recommendations) < 2 or not next_action or not tip:
+    if not greeting or len(recommendations) < 1 or not next_action or not tip:
         return None
 
     return {

@@ -5,6 +5,7 @@ from typing import Any
 from flask import Blueprint, jsonify, request
 
 from ..services.agent import run_agentic_chat
+from ..services.gemini_client import load_gemini_config
 from ..services.personalized_home import generate_personalized_home
 
 chat_bp = Blueprint("chat", __name__)
@@ -50,11 +51,17 @@ def personalized_home() -> Any:
         onboarding_preference=pref.strip(),
     )
     if result is None:
-        return jsonify(
-            {
-                "error": "Unable to generate personalized insights. "
-                "Configure GEMINI_API_KEY and GEMINI_MODEL in backend .env."
-            }
-        ), 503
+        cfg = load_gemini_config()
+        if not cfg.api_keys:
+            hint = "Add GEMINI_API_KEY (comma-separated for fallbacks) or GEMINI_API_KEYS in backend/.env."
+        elif not cfg.models:
+            hint = "Add GEMINI_MODEL or GEMINI_MODELS (e.g. gemini-2.0-flash) in backend/.env."
+        else:
+            hint = (
+                "All API keys / models failed or the response was not valid JSON. "
+                "Try GEMINI_MODELS=gemini-2.0-flash,gemini-1.5-flash "
+                "and restart the server. Check terminal logs for details."
+            )
+        return jsonify({"error": f"Unable to generate personalized insights. {hint}"}), 503
 
     return jsonify(result)
